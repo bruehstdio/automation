@@ -1,0 +1,17 @@
+name: Sync to mirror
+
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: "0 0/12 * * *"
+
+jobs:
+  sync-org:
+    uses: ./.github/workflows/sync-org.yml
+    with:
+      source_org: "bruehstdio"
+      target_host: "codeberg.org"
+      target_org: "daniel-org"
+    secrets:
+      SOURCE_TOKEN: ${{ secrets.SOURCE_TOKEN }}
+      TARGET_TOKEN: ${{ secrets.TARGET_TOKEN }}
