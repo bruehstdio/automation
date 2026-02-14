@@ -1,0 +1,63 @@
+name: Sync Repository
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_repo:
+        description: "Source repository (owner/repo)"
+        required: true
+        type: string
+      source_branch:
+        description: "Source branch"
+        required: false
+        default: "main"
+        type: string
+      target_repo:
+        description: "Target repository (owner/repo)"
+        required: true
+        type: string
+      target_branch:
+        description: "Target branch (defaults to same as source)"
+        required: false
+        default: ""
+        type: string
+      force_push:
+        description: "Force push to target"
+        required: false
+        default: true
+        type: boolean
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Determine target branch
+        id: branches
+        run: |
+          TARGET_BRANCH="${{ inputs.target_branch }}"
+          if [[ -z "$TARGET_BRANCH" ]]; then
+            TARGET_BRANCH="${{ inputs.source_branch }}"
+          fi
+          echo "target_branch=$TARGET_BRANCH" >> "$GITHUB_OUTPUT"
+
+      - name: Clone source repository
+        run: |
+          git clone --branch "${{ inputs.source_branch }}" --single-branch \
+            "https://x-access-token:${{ secrets.SYNC_TOKEN }}@github.com/${{ inputs.source_repo }}.git" repo
+        env:
+          GIT_TERMINAL_PROMPT: "0"
+
+      - name: Push to target repository
+        working-directory: repo
+        run: |
+          git remote add target \
+            "https://x-access-token:${{ secrets.SYNC_TOKEN }}@github.com/${{ inputs.target_repo }}.git"
+
+          PUSH_ARGS=("origin/${{ inputs.source_branch }}:refs/heads/${{ steps.branches.outputs.target_branch }}")
+          if [[ "${{ inputs.force_push }}" == "true" ]]; then
+            PUSH_ARGS=("--force" "${PUSH_ARGS[@]}")
+          fi
+
+          git push target "${PUSH_ARGS[@]}"
+        env:
+          GIT_TERMINAL_PROMPT: "0"
