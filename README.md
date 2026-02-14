@@ -51,3 +51,41 @@ A collection of automation scripts and GitHub Actions workflows for common repos
         SOURCE_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         TARGET_TOKEN: ${{ secrets.GITLAB_TOKEN }}
   ```
+
+- **[`.github/workflows/sync-org.yml`](.github/workflows/sync-org.yml)** — Reusable workflow that syncs all repositories from a source organization to a target organization on another git platform. Lists all repos using the GitHub CLI and triggers the sync-repo workflow for each one.
+
+  **Inputs:**
+
+  | Input | Description | Default |
+  |---|---|---|
+  | `source_host` | Source git host (e.g., `github.com`) | `github.com` |
+  | `source_org` | Source organization/owner | *required* |
+  | `source_branch` | Branch to sync from (applies to all repos) | `main` |
+  | `target_host` | Target git host (e.g., `gitlab.com`) | *required* |
+  | `target_org` | Target organization/owner | *required* |
+  | `target_branch` | Branch to push to | same as source |
+  | `force_push` | Force push to target | `true` |
+
+  **Secrets:**
+
+  | Secret | Description |
+  |---|---|
+  | `SOURCE_TOKEN` | Access token for source repositories (needs org read access) |
+  | `TARGET_TOKEN` | Access token for target repositories (basic auth format) |
+
+  > **Note:** When triggering manually, ensure `SOURCE_TOKEN` and `TARGET_TOKEN` are configured as repository secrets. The `SOURCE_TOKEN` must have permission to list repositories in the source organization.
+
+  **Usage from another workflow:**
+
+  ```yaml
+  jobs:
+    sync-org:
+      uses: danielfbm/automation/.github/workflows/sync-org.yml@main
+      with:
+        source_org: "myorg"
+        target_host: "gitlab.com"
+        target_org: "myorg"
+      secrets:
+        SOURCE_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        TARGET_TOKEN: ${{ secrets.GITLAB_TOKEN }}
+  ```

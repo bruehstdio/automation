@@ -1,0 +1,114 @@
+name: Sync Organization
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_host:
+        description: "Source git host (e.g., github.com)"
+        required: false
+        default: "github.com"
+        type: string
+      source_org:
+        description: "Source organization/owner"
+        required: true
+        type: string
+      source_branch:
+        description: "Source branch to sync from (applies to all repos)"
+        required: false
+        default: "main"
+        type: string
+      target_host:
+        description: "Target git host (e.g., gitlab.com, bitbucket.org)"
+        required: true
+        type: string
+      target_org:
+        description: "Target organization/owner"
+        required: true
+        type: string
+      target_branch:
+        description: "Target branch (defaults to same as source)"
+        required: false
+        default: ""
+        type: string
+      force_push:
+        description: "Force push to target"
+        required: false
+        default: true
+        type: boolean
+  workflow_call:
+    inputs:
+      source_host:
+        description: "Source git host (e.g., github.com)"
+        required: false
+        default: "github.com"
+        type: string
+      source_org:
+        description: "Source organization/owner"
+        required: true
+        type: string
+      source_branch:
+        description: "Source branch to sync from (applies to all repos)"
+        required: false
+        default: "main"
+        type: string
+      target_host:
+        description: "Target git host (e.g., gitlab.com, bitbucket.org)"
+        required: true
+        type: string
+      target_org:
+        description: "Target organization/owner"
+        required: true
+        type: string
+      target_branch:
+        description: "Target branch (defaults to same as source)"
+        required: false
+        default: ""
+        type: string
+      force_push:
+        description: "Force push to target"
+        required: false
+        default: true
+        type: boolean
+    secrets:
+      SOURCE_TOKEN:
+        description: "Token for accessing source repositories"
+        required: true
+      TARGET_TOKEN:
+        description: "Token for accessing target repositories (basic auth)"
+        required: true
+
+jobs:
+  list-repos:
+    runs-on: ubuntu-latest
+    outputs:
+      repos: ${{ steps.get-repos.outputs.repos }}
+    steps:
+      - name: List all repositories
+        id: get-repos
+        env:
+          GH_TOKEN: ${{ secrets.SOURCE_TOKEN }}
+        run: |
+          repos=$(gh repo list "${{ inputs.source_org }}" --limit 1000 --json name --jq '[.[].name]')
+          echo "repos=$repos" >> "$GITHUB_OUTPUT"
+          echo "Found $(echo "$repos" | jq 'length') repositories"
+
+  sync-repos:
+    needs: list-repos
+    if: needs.list-repos.outputs.repos != '[]'
+    strategy:
+      matrix:
+        repo: ${{ fromJson(needs.list-repos.outputs.repos) }}
+      fail-fast: false
+      max-parallel: 5
+    uses: ./.github/workflows/sync-repo.yml
+    with:
+      source_host: ${{ inputs.source_host }}
+      source_repo: "${{ inputs.source_org }}/${{ matrix.repo }}"
+      source_branch: ${{ inputs.source_branch }}
+      target_host: ${{ inputs.target_host }}
+      target_repo: "${{ inputs.target_org }}/${{ matrix.repo }}"
+      target_branch: ${{ inputs.target_branch }}
+      force_push: ${{ inputs.force_push }}
+    secrets:
+      SOURCE_TOKEN: ${{ secrets.SOURCE_TOKEN }}
+      TARGET_TOKEN: ${{ secrets.TARGET_TOKEN }}
