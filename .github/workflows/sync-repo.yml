@@ -3,6 +3,11 @@ name: Sync Repository
 on:
   workflow_dispatch:
     inputs:
+      source_host:
+        description: "Source git host (e.g., github.com)"
+        required: false
+        default: "github.com"
+        type: string
       source_repo:
         description: "Source repository (owner/repo)"
         required: true
@@ -11,6 +16,10 @@ on:
         description: "Source branch"
         required: false
         default: "main"
+        type: string
+      target_host:
+        description: "Target git host (e.g., gitlab.com, bitbucket.org)"
+        required: true
         type: string
       target_repo:
         description: "Target repository (owner/repo)"
@@ -26,6 +35,47 @@ on:
         required: false
         default: true
         type: boolean
+  workflow_call:
+    inputs:
+      source_host:
+        description: "Source git host (e.g., github.com)"
+        required: false
+        default: "github.com"
+        type: string
+      source_repo:
+        description: "Source repository (owner/repo)"
+        required: true
+        type: string
+      source_branch:
+        description: "Source branch"
+        required: false
+        default: "main"
+        type: string
+      target_host:
+        description: "Target git host (e.g., gitlab.com, bitbucket.org)"
+        required: true
+        type: string
+      target_repo:
+        description: "Target repository (owner/repo)"
+        required: true
+        type: string
+      target_branch:
+        description: "Target branch (defaults to same as source)"
+        required: false
+        default: ""
+        type: string
+      force_push:
+        description: "Force push to target"
+        required: false
+        default: true
+        type: boolean
+    secrets:
+      SOURCE_TOKEN:
+        description: "Token for accessing source repository"
+        required: true
+      TARGET_TOKEN:
+        description: "Token for accessing target repository (basic auth)"
+        required: true
 
 jobs:
   sync:
@@ -43,7 +93,7 @@ jobs:
       - name: Clone source repository
         run: |
           git clone --branch "${{ inputs.source_branch }}" --single-branch \
-            "https://x-access-token:${{ secrets.SYNC_TOKEN }}@github.com/${{ inputs.source_repo }}.git" repo
+            "https://x-access-token:${{ secrets.SOURCE_TOKEN }}@${{ inputs.source_host }}/${{ inputs.source_repo }}.git" repo
         env:
           GIT_TERMINAL_PROMPT: "0"
 
@@ -51,7 +101,7 @@ jobs:
         working-directory: repo
         run: |
           git remote add target \
-            "https://x-access-token:${{ secrets.SYNC_TOKEN }}@github.com/${{ inputs.target_repo }}.git"
+            "https://${{ secrets.TARGET_TOKEN }}@${{ inputs.target_host }}/${{ inputs.target_repo }}.git"
 
           PUSH_ARGS=("origin/${{ inputs.source_branch }}:refs/heads/${{ steps.branches.outputs.target_branch }}")
           if [[ "${{ inputs.force_push }}" == "true" ]]; then
