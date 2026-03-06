@@ -1,0 +1,42 @@
+name: Update Metadata
+
+on:
+  workflow_dispatch:
+    inputs:
+      file_path:
+        description: "File path to update (relative to repo root)"
+        required: false
+        default: ".github/metadata.txt"
+        type: string
+  schedule:
+    - cron: "0 9 * * 1"
+
+jobs:
+  update-metadata:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Update date in file
+        env:
+          FILE_PATH: ${{ inputs.file_path || '.github/metadata.txt' }}
+        run: |
+          mkdir -p "$(dirname "$FILE_PATH")"
+          echo "last_updated: $(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$FILE_PATH"
+
+      - name: Commit and push
+        env:
+          FILE_PATH: ${{ inputs.file_path || '.github/metadata.txt' }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add "$FILE_PATH"
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "chore: update metadata date [skip ci]"
+            git push
+          fi
