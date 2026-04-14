@@ -52,7 +52,7 @@ A collection of automation scripts and GitHub Actions workflows for common repos
         TARGET_TOKEN: ${{ secrets.GITLAB_TOKEN }}
   ```
 
-- **[`.github/workflows/sync-org.yml`](.github/workflows/sync-org.yml)** — Reusable workflow that syncs all repositories from a source organization to a target organization on another git platform. Lists all repos using the GitHub CLI and triggers the sync-repo workflow for each one.
+- **[`.github/workflows/sync-org.yml`](.github/workflows/sync-org.yml)** — Reusable workflow that syncs all repositories from a source organization to a target organization on another git platform. Lists all repos using the GitHub CLI, skips missing target repositories with a warning, and adds them to the workflow summary.
 
   **Inputs:**
 
@@ -73,7 +73,7 @@ A collection of automation scripts and GitHub Actions workflows for common repos
   | `SOURCE_TOKEN` | Access token for source repositories (needs org read access) |
   | `TARGET_TOKEN` | Access token for target repositories (basic auth format) |
 
-  > **Note:** When triggering manually, ensure `SOURCE_TOKEN` and `TARGET_TOKEN` are configured as repository secrets. The `SOURCE_TOKEN` must have permission to list repositories in the source organization.
+  > **Note:** When triggering manually, ensure `SOURCE_TOKEN` and `TARGET_TOKEN` are configured as repository secrets. The `SOURCE_TOKEN` must have permission to list repositories in the source organization. Target repositories must already exist; missing ones are skipped, logged as warnings, and listed in the workflow summary.
 
   **Usage from another workflow:**
 

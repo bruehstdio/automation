@@ -82,6 +82,11 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       repos: ${{ steps.get-repos.outputs.repos }}
+      sync_repos: ${{ steps.check-target-repos.outputs.sync_repos }}
+      missing_repos: ${{ steps.check-target-repos.outputs.missing_repos }}
+      source_repo_count: ${{ steps.check-target-repos.outputs.source_repo_count }}
+      sync_repo_count: ${{ steps.check-target-repos.outputs.sync_repo_count }}
+      missing_repo_count: ${{ steps.check-target-repos.outputs.missing_repo_count }}
     steps:
       - name: List all repositories
         id: get-repos
@@ -92,12 +97,51 @@ jobs:
           echo "repos=$repos" >> "$GITHUB_OUTPUT"
           echo "Found $(echo "$repos" | jq 'length') repositories"
 
+      - name: Check target repositories
+        id: check-target-repos
+        env:
+          GIT_TERMINAL_PROMPT: "0"
+          REPOS: ${{ steps.get-repos.outputs.repos }}
+          TARGET_HOST: ${{ inputs.target_host }}
+          TARGET_ORG: ${{ inputs.target_org }}
+          TARGET_TOKEN: ${{ secrets.TARGET_TOKEN }}
+        run: |
+          sync_repos='[]'
+          missing_repos='[]'
+
+          while IFS= read -r repo; do
+            [[ -z "$repo" ]] && continue
+
+            target_url="https://${TARGET_TOKEN}@${TARGET_HOST}/${TARGET_ORG}/${repo}.git"
+
+            if git ls-remote "$target_url" >/dev/null 2>&1; then
+              sync_repos=$(jq --arg repo "$repo" '. + [$repo]' <<<"$sync_repos")
+            else
+              missing_repos=$(jq --arg repo "$repo" '. + [$repo]' <<<"$missing_repos")
+            fi
+          done < <(jq -r '.[]' <<<"$REPOS")
+
+          source_repo_count=$(jq 'length' <<<"$REPOS")
+          sync_repo_count=$(jq 'length' <<<"$sync_repos")
+          missing_repo_count=$(jq 'length' <<<"$missing_repos")
+
+          echo "sync_repos=$sync_repos" >> "$GITHUB_OUTPUT"
+          echo "missing_repos=$missing_repos" >> "$GITHUB_OUTPUT"
+          echo "source_repo_count=$source_repo_count" >> "$GITHUB_OUTPUT"
+          echo "sync_repo_count=$sync_repo_count" >> "$GITHUB_OUTPUT"
+          echo "missing_repo_count=$missing_repo_count" >> "$GITHUB_OUTPUT"
+
+          if [[ "$missing_repo_count" -gt 0 ]]; then
+            missing_repo_names=$(jq -r 'join(", ")' <<<"$missing_repos")
+            echo "::warning::Skipping ${missing_repo_count} target repositories that do not exist on ${TARGET_HOST}/${TARGET_ORG}: ${missing_repo_names}"
+          fi
+
   sync-repos:
     needs: list-repos
-    if: needs.list-repos.outputs.repos != '[]'
+    if: needs.list-repos.outputs.sync_repos != '[]'
     strategy:
       matrix:
-        repo: ${{ fromJson(needs.list-repos.outputs.repos) }}
+        repo: ${{ fromJson(needs.list-repos.outputs.sync_repos) }}
       fail-fast: false
       max-parallel: 5
     uses: ./.github/workflows/sync-repo.yml
@@ -112,3 +156,47 @@ jobs:
     secrets:
       SOURCE_TOKEN: ${{ secrets.SOURCE_TOKEN }}
       TARGET_TOKEN: ${{ secrets.TARGET_TOKEN }}
+
+  summary:
+    runs-on: ubuntu-latest
+    needs:
+      - list-repos
+      - sync-repos
+    if: always()
+    steps:
+      - name: Write workflow summary
+        env:
+          SOURCE_ORG: ${{ inputs.source_org }}
+          TARGET_HOST: ${{ inputs.target_host }}
+          TARGET_ORG: ${{ inputs.target_org }}
+          SOURCE_REPO_COUNT: ${{ needs.list-repos.outputs.source_repo_count }}
+          SYNC_REPO_COUNT: ${{ needs.list-repos.outputs.sync_repo_count }}
+          MISSING_REPO_COUNT: ${{ needs.list-repos.outputs.missing_repo_count }}
+          MISSING_REPOS: ${{ needs.list-repos.outputs.missing_repos }}
+        run: |
+          source_repo_count="${SOURCE_REPO_COUNT:-0}"
+          sync_repo_count="${SYNC_REPO_COUNT:-0}"
+          missing_repo_count="${MISSING_REPO_COUNT:-0}"
+          missing_repos="${MISSING_REPOS:-[]}"
+
+          {
+            echo "## Organization sync summary"
+            echo
+            echo "Source: \`${SOURCE_ORG}\`"
+            echo
+            echo "Target: \`${TARGET_HOST}/${TARGET_ORG}\`"
+            echo
+            echo "| Metric | Count |"
+            echo "| --- | ---: |"
+            echo "| Source repositories | ${source_repo_count} |"
+            echo "| Synced target repositories | ${sync_repo_count} |"
+            echo "| Missing target repositories | ${missing_repo_count} |"
+            echo
+
+            if [[ "${missing_repo_count}" -gt 0 ]]; then
+              echo "### Missing target repositories"
+              jq -r --arg target_org "${TARGET_ORG}" '.[] | "- `\($target_org)/\(.)`"' <<<"${missing_repos}"
+            else
+              echo "No missing target repositories."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
