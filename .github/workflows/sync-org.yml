@@ -115,9 +115,9 @@ jobs:
             target_url="https://${TARGET_TOKEN}@${TARGET_HOST}/${TARGET_ORG}/${repo}.git"
 
             if git ls-remote "$target_url" >/dev/null 2>&1; then
-              sync_repos=$(jq --arg repo "$repo" '. + [$repo]' <<<"$sync_repos")
+              sync_repos=$(jq -c --arg repo "$repo" '. + [$repo]' <<<"$sync_repos")
             else
-              missing_repos=$(jq --arg repo "$repo" '. + [$repo]' <<<"$missing_repos")
+              missing_repos=$(jq -c --arg repo "$repo" '. + [$repo]' <<<"$missing_repos")
             fi
           done < <(jq -r '.[]' <<<"$REPOS")
 
@@ -125,11 +125,13 @@ jobs:
           sync_repo_count=$(jq 'length' <<<"$sync_repos")
           missing_repo_count=$(jq 'length' <<<"$missing_repos")
 
-          echo "sync_repos=$sync_repos" >> "$GITHUB_OUTPUT"
-          echo "missing_repos=$missing_repos" >> "$GITHUB_OUTPUT"
-          echo "source_repo_count=$source_repo_count" >> "$GITHUB_OUTPUT"
-          echo "sync_repo_count=$sync_repo_count" >> "$GITHUB_OUTPUT"
-          echo "missing_repo_count=$missing_repo_count" >> "$GITHUB_OUTPUT"
+          {
+            echo "sync_repos=$sync_repos"
+            echo "missing_repos=$missing_repos"
+            echo "source_repo_count=$source_repo_count"
+            echo "sync_repo_count=$sync_repo_count"
+            echo "missing_repo_count=$missing_repo_count"
+          } >> "$GITHUB_OUTPUT"
 
           if [[ "$missing_repo_count" -gt 0 ]]; then
             missing_repo_names=$(jq -r 'join(", ")' <<<"$missing_repos")
